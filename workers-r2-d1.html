@@ -1467,5 +1467,59 @@ curl https://image-host.your-account.workers.dev/images</pre></div>
 
   </main>
 </div>
+<script>
+  // ─── Intersection Observer for fade-in animations ───
+  const sections = document.querySelectorAll('.section');
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+      }
+    });
+  }, { threshold: 0.08 });
+
+  sections.forEach(s => observer.observe(s));
+
+  // ─── Active nav on scroll ───
+  const navItems = document.querySelectorAll('.nav-item[href^="#"]');
+  const allSections = document.querySelectorAll('section[id]');
+
+  const scrollObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        navItems.forEach(item => item.classList.remove('active'));
+        const id = entry.target.getAttribute('id');
+        const activeNav = document.querySelector(`.nav-item[href="#${id}"]`);
+        if (activeNav) activeNav.classList.add('active');
+      }
+    });
+  }, { threshold: 0.3 });
+
+  allSections.forEach(s => scrollObserver.observe(s));
+
+  // ─── Copy code button ───
+  document.querySelectorAll('.code-block').forEach(block => {
+    const header = block.querySelector('.code-header');
+    const btn = document.createElement('button');
+    btn.textContent = '复制';
+    btn.style.cssText = `
+      background: #2a2a2a; border: 1px solid #3a3a3a; color: #888;
+      font-size: 11px; font-family: 'JetBrains Mono', monospace;
+      padding: 3px 10px; border-radius: 4px; cursor: pointer;
+      transition: all 0.2s; letter-spacing: 0.5px;
+    `;
+    btn.addEventListener('mouseover', () => { btn.style.color = '#f6821f'; btn.style.borderColor = '#f6821f55'; });
+    btn.addEventListener('mouseout', () => { btn.style.color = '#888'; btn.style.borderColor = '#3a3a3a'; });
+    btn.addEventListener('click', () => {
+      const code = block.querySelector('pre').innerText;
+      navigator.clipboard.writeText(code).then(() => {
+        btn.textContent = '✓ 已复制';
+        btn.style.color = '#4ade80';
+        setTimeout(() => { btn.textContent = '复制'; btn.style.color = '#888'; }, 2000);
+      });
+    });
+    header.appendChild(btn);
+  });
+</script>
 </body>
 </html>
