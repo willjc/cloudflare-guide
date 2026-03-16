@@ -904,6 +904,138 @@
 
     <hr class="divider" />
 
+<!-- 架构总览 -->
+<section class="section" id="overview">
+  <div class="section-header">
+    <div class="section-icon">🏗️</div>
+    <div class="section-meta">
+      <div class="section-tag">ARCHITECTURE</div>
+      <div class="section-title">架构<span>总览</span></div>
+      <p class="section-desc">三个产品各司其职，Worker 是唯一入口，R2 和 D1 是后端资源，不对外暴露。</p>
+    </div>
+  </div>
+
+  <div class="arch-diagram">
+    <div class="arch-row">
+      <div class="arch-box arch-user">👤 用户浏览器</div>
+      <div class="arch-arrow">HTTP 请求</div>
+      <div class="arch-box arch-worker">⚡ Worker<br><small>唯一入口</small></div>
+    </div>
+    <div class="arch-split">
+      <div class="arch-branch">
+        <div class="arch-arrow-down">PUT file</div>
+        <div class="arch-box arch-r2">🪣 R2<br><small>存图片文件</small></div>
+      </div>
+      <div class="arch-branch">
+        <div class="arch-arrow-down">INSERT / SELECT</div>
+        <div class="arch-box arch-d1">🗄️ D1<br><small>存元数据</small></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="usecase-grid" style="margin-top: 32px;">
+    <div class="usecase-card">
+      <div class="usecase-icon">📤</div>
+      <div class="usecase-title">上传流程</div>
+      <div class="usecase-desc">POST /upload → Worker 收到文件 → put() 存入 R2 → INSERT 写入 D1 → 返回图片 URL</div>
+    </div>
+    <div class="usecase-card">
+      <div class="usecase-icon">📋</div>
+      <div class="usecase-title">查询流程</div>
+      <div class="usecase-desc">GET /images → Worker 查询 D1 → SELECT 获取列表 → 返回含 R2 URL 的 JSON 数组</div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- Workers -->
+<section class="section" id="workers">
+  <div class="section-header">
+    <div class="section-icon">⚡</div>
+    <div class="section-meta">
+      <div class="section-tag">CLOUDFLARE WORKERS</div>
+      <div class="section-title">Workers<span> 边缘函数</span></div>
+      <p class="section-desc">运行在 Cloudflare 全球 200+ 节点的无服务器函数，用 JavaScript/TypeScript 编写，响应 HTTP 请求，无需服务器、无需 Docker、无需运维。</p>
+    </div>
+  </div>
+
+  <div class="usecase-grid">
+    <div class="usecase-card">
+      <div class="usecase-icon">🏃</div>
+      <div class="usecase-title">极速冷启动</div>
+      <div class="usecase-desc">基于 V8 隔离器，冷启动 &lt;1ms，比传统 Serverless 快 100 倍</div>
+    </div>
+    <div class="usecase-card">
+      <div class="usecase-icon">🆓</div>
+      <div class="usecase-title">免费额度慷慨</div>
+      <div class="usecase-desc">每天 10 万次请求完全免费，CPU 时间 10ms/请求</div>
+    </div>
+    <div class="usecase-card">
+      <div class="usecase-icon">🌐</div>
+      <div class="usecase-title">全球边缘部署</div>
+      <div class="usecase-desc">一次 deploy，自动部署到全球 200+ PoP，就近响应用户</div>
+    </div>
+  </div>
+
+  <h3 style="color:var(--text);font-size:16px;font-weight:700;margin:32px 0 12px;">最简 Worker：Hello World</h3>
+
+  <div class="code-block">
+    <div class="code-header">
+      <div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div>
+      <span class="code-lang">src/index.js</span>
+    </div>
+    <div class="code-body">
+<pre><span class="k">export default</span> {
+  <span class="k">async</span> <span class="n">fetch</span>(request, env) {
+    <span class="k">const</span> <span class="v">url</span> = <span class="k">new</span> <span class="n">URL</span>(request.<span class="n">url</span>);
+    <span class="k">return new</span> <span class="n">Response</span>(<span class="s">`Hello from Workers! 路径: ${url.pathname}`</span>, {
+      headers: { <span class="s">'Content-Type'</span>: <span class="s">'text/plain; charset=utf-8'</span> },
+    });
+  },
+};</pre>
+    </div>
+  </div>
+
+  <h3 style="color:var(--text);font-size:16px;font-weight:700;margin:28px 0 12px;">wrangler.toml 配置</h3>
+
+  <div class="code-block">
+    <div class="code-header">
+      <div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div>
+      <span class="code-lang">wrangler.toml</span>
+    </div>
+    <div class="code-body">
+<pre><span class="v">name</span> = <span class="s">"my-worker"</span>
+<span class="v">main</span> = <span class="s">"src/index.js"</span>
+<span class="v">compatibility_date</span> = <span class="s">"2024-01-01"</span></pre>
+    </div>
+  </div>
+
+  <h3 style="color:var(--text);font-size:16px;font-weight:700;margin:28px 0 12px;">关键命令</h3>
+
+  <div class="code-block">
+    <div class="code-header">
+      <div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div>
+      <span class="code-lang">BASH</span>
+    </div>
+    <div class="code-body">
+<pre><span class="c"># 初始化新项目（wrangler init 已废弃，使用此命令）</span>
+<span class="n">npm</span> create cloudflare@latest my-worker
+
+<span class="c"># 本地开发（热重载）</span>
+<span class="n">wrangler</span> dev
+
+<span class="c"># 部署到生产</span>
+<span class="n">wrangler</span> deploy
+
+<span class="c"># 查看日志</span>
+<span class="n">wrangler</span> tail</pre>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
   </main>
 </div>
 </body>
