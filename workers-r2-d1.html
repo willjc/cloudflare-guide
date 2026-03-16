@@ -1242,6 +1242,229 @@
 
   <hr class="divider" />
 
+  <!-- 完整示例 -->
+  <section class="section" id="full-example">
+    <div class="section-header">
+      <div class="section-icon">🚀</div>
+      <div class="section-meta">
+        <div class="section-tag">FULL EXAMPLE</div>
+        <div class="section-title">完整<span>示例</span></div>
+        <p class="section-desc">把 Workers、R2、D1 串起来，实现一个图片托管服务：上传图片到 R2，元数据写入 D1，通过 API 查询图片列表。</p>
+      </div>
+    </div>
+
+    <div class="alert alert-orange">
+      <span class="alert-icon">📋</span>
+      <div><strong>实现两个接口</strong>：<code>POST /upload</code> 上传图片，<code>GET /images</code> 查询列表。</div>
+    </div>
+
+    <h3 style="color:var(--text);font-size:16px;font-weight:700;margin:28px 0 8px;">第 1 步：建表</h3>
+    <p style="font-size:14px;color:var(--text-dim);margin-bottom:12px;">创建 <code>schema.sql</code> 文件并在 D1 中执行：</p>
+
+    <div class="code-block">
+      <div class="code-header">
+        <div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div>
+        <span class="code-lang">schema.sql</span>
+      </div>
+      <div class="code-body">
+<pre><span class="k">CREATE TABLE IF NOT EXISTS</span> <span class="n">images</span> (
+  <span class="v">id</span>         <span class="k">INTEGER PRIMARY KEY AUTOINCREMENT</span>,
+  <span class="v">key</span>        <span class="k">TEXT NOT NULL</span>,
+  <span class="v">url</span>        <span class="k">TEXT NOT NULL</span>,
+  <span class="v">filename</span>   <span class="k">TEXT</span>,
+  <span class="v">created_at</span> <span class="k">DATETIME DEFAULT</span> <span class="n">CURRENT_TIMESTAMP</span>
+);</pre>
+      </div>
+    </div>
+
+    <h3 style="color:var(--text);font-size:16px;font-weight:700;margin:28px 0 8px;">第 2 步：Worker 主逻辑</h3>
+    <p style="font-size:14px;color:var(--text-dim);margin-bottom:12px;">创建 <code>src/index.js</code>：</p>
+
+    <div class="code-block">
+      <div class="code-header">
+        <div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div>
+        <span class="code-lang">src/index.js · 完整代码</span>
+      </div>
+      <div class="code-body">
+<pre><span class="k">export default</span> {
+  <span class="k">async</span> <span class="n">fetch</span>(request, env) {
+    <span class="k">const</span> <span class="v">url</span> = <span class="k">new</span> <span class="n">URL</span>(request.<span class="n">url</span>);
+
+    <span class="k">if</span> (request.<span class="v">method</span> === <span class="s">'POST'</span> &amp;&amp; <span class="v">url</span>.<span class="v">pathname</span> === <span class="s">'/upload'</span>) {
+      <span class="k">return</span> <span class="n">handleUpload</span>(request, env);
+    }
+    <span class="k">if</span> (request.<span class="v">method</span> === <span class="s">'GET'</span> &amp;&amp; <span class="v">url</span>.<span class="v">pathname</span> === <span class="s">'/images'</span>) {
+      <span class="k">return</span> <span class="n">handleList</span>(env);
+    }
+    <span class="k">return new</span> <span class="n">Response</span>(<span class="s">'Not Found'</span>, { status: <span class="v">404</span> });
+  },
+};
+
+<span class="k">async function</span> <span class="n">handleUpload</span>(request, env) {
+  <span class="c">// 1. 解析 multipart 表单，获取文件字段</span>
+  <span class="k">const</span> <span class="v">formData</span> = <span class="k">await</span> request.<span class="n">formData</span>();
+  <span class="k">const</span> <span class="v">file</span> = <span class="v">formData</span>.<span class="n">get</span>(<span class="s">'file'</span>);
+  <span class="k">if</span> (!<span class="v">file</span>) {
+    <span class="k">return</span> <span class="n">json</span>({ error: <span class="s">'缺少 file 字段'</span> }, <span class="v">400</span>);
+  }
+
+  <span class="c">// 2. 生成唯一 key，存入 R2</span>
+  <span class="k">const</span> <span class="v">ext</span> = <span class="v">file</span>.<span class="v">name</span>.<span class="n">split</span>(<span class="s">'.'</span>).<span class="n">pop</span>() || <span class="s">'bin'</span>;
+  <span class="k">const</span> <span class="v">key</span> = <span class="s">`images/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`</span>;
+  <span class="k">await</span> env.<span class="n">BUCKET</span>.<span class="n">put</span>(<span class="v">key</span>, <span class="v">file</span>.<span class="n">stream</span>(), {
+    httpMetadata: { contentType: <span class="v">file</span>.<span class="v">type</span> },
+  });
+
+  <span class="c">// 3. 组装公开 URL（需在 Dashboard 开启 bucket 公开访问）</span>
+  <span class="k">const</span> <span class="v">url</span> = <span class="s">`https://pub-YOUR_BUCKET_ID.r2.dev/${key}`</span>;
+
+  <span class="c">// 4. 写入 D1 元数据</span>
+  <span class="k">await</span> env.<span class="n">DB</span>
+    .<span class="n">prepare</span>(<span class="s">'INSERT INTO images (key, url, filename) VALUES (?, ?, ?)'</span>)
+    .<span class="n">bind</span>(<span class="v">key</span>, <span class="v">url</span>, <span class="v">file</span>.<span class="v">name</span>)
+    .<span class="n">run</span>();
+
+  <span class="k">return</span> <span class="n">json</span>({ success: <span class="k">true</span>, <span class="v">url</span>, <span class="v">key</span> });
+}
+
+<span class="k">async function</span> <span class="n">handleList</span>(env) {
+  <span class="k">const</span> { <span class="v">results</span> } = <span class="k">await</span> env.<span class="n">DB</span>
+    .<span class="n">prepare</span>(<span class="s">'SELECT * FROM images ORDER BY created_at DESC LIMIT 20'</span>)
+    .<span class="n">all</span>();
+  <span class="k">return</span> <span class="n">json</span>(<span class="v">results</span>);
+}
+
+<span class="c">// 辅助：返回 JSON 响应</span>
+<span class="k">function</span> <span class="n">json</span>(data, status = <span class="v">200</span>) {
+  <span class="k">return new</span> <span class="n">Response</span>(<span class="n">JSON</span>.<span class="n">stringify</span>(data, <span class="k">null</span>, <span class="v">2</span>), {
+    status,
+    headers: {
+      <span class="s">'Content-Type'</span>: <span class="s">'application/json'</span>,
+      <span class="s">'Access-Control-Allow-Origin'</span>: <span class="s">'*'</span>,
+    },
+  });
+}</pre>
+      </div>
+    </div>
+
+    <h3 style="color:var(--text);font-size:16px;font-weight:700;margin:28px 0 8px;">第 3 步：完整 wrangler.toml</h3>
+
+    <div class="code-block">
+      <div class="code-header">
+        <div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div>
+        <span class="code-lang">wrangler.toml · 完整配置</span>
+      </div>
+      <div class="code-body">
+<pre><span class="v">name</span>               = <span class="s">"image-host"</span>
+<span class="v">main</span>               = <span class="s">"src/index.js"</span>
+<span class="v">compatibility_date</span> = <span class="s">"2024-01-01"</span>
+
+[[<span class="n">r2_buckets</span>]]
+<span class="v">binding</span>     = <span class="s">"BUCKET"</span>
+<span class="v">bucket_name</span> = <span class="s">"my-images"</span>
+
+[[<span class="n">d1_databases</span>]]
+<span class="v">binding</span>       = <span class="s">"DB"</span>
+<span class="v">database_name</span> = <span class="s">"images-db"</span>
+<span class="v">database_id</span>   = <span class="s">"从 wrangler d1 create 输出中获取"</span></pre>
+      </div>
+    </div>
+
+    <h3 style="color:var(--text);font-size:16px;font-weight:700;margin:28px 0 8px;">第 4 步：部署流程</h3>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <div class="step-title">创建 R2 Bucket 并开启公开访问</div>
+          <div class="step-desc">
+            <div class="code-block" style="margin-top:10px">
+              <div class="code-header"><div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div><span class="code-lang">BASH</span></div>
+              <div class="code-body"><pre><span class="n">wrangler</span> r2 bucket create my-images
+<span class="c"># 然后在 Dashboard: R2 → my-images → Settings → Public Access → Allow</span></pre></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <div class="step-title">创建 D1 数据库并建表</div>
+          <div class="step-desc">
+            <div class="code-block" style="margin-top:10px">
+              <div class="code-header"><div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div><span class="code-lang">BASH</span></div>
+              <div class="code-body"><pre><span class="n">wrangler</span> d1 create images-db
+<span class="c"># 复制输出的 database_id 填入 wrangler.toml</span>
+<span class="n">wrangler</span> d1 execute images-db <span class="f">--file</span>=./schema.sql</pre></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <div class="step-title">部署 Worker</div>
+          <div class="step-desc">
+            <div class="code-block" style="margin-top:10px">
+              <div class="code-header"><div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div><span class="code-lang">BASH</span></div>
+              <div class="code-body"><pre><span class="n">wrangler</span> deploy
+<span class="c"># 成功后得到 https://image-host.your-account.workers.dev</span></pre></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <div class="step-title">测试接口</div>
+          <div class="step-desc">
+            <div class="code-block" style="margin-top:10px">
+              <div class="code-header"><div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div><span class="code-lang">BASH · 测试</span></div>
+              <div class="code-body"><pre><span class="c"># 上传图片</span>
+curl <span class="f">-X</span> POST https://image-host.your-account.workers.dev/upload \
+  <span class="f">-F</span> <span class="s">"file=@./photo.jpg"</span>
+
+<span class="c"># 查询列表</span>
+curl https://image-host.your-account.workers.dev/images</pre></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- 下一步 -->
+  <section class="section" id="next">
+    <div class="section-header">
+      <div class="section-icon">🔮</div>
+      <div class="section-meta">
+        <div class="section-tag">NEXT STEPS</div>
+        <div class="section-title">下一步<span>扩展</span></div>
+        <p class="section-desc">图片托管跑通后，这三个方向可以让它更完善。</p>
+      </div>
+    </div>
+
+    <div class="summary-grid">
+      <div class="summary-card">
+        <div class="emoji">🔐</div>
+        <div class="s-title">加 API Key 鉴权</div>
+        <div class="s-desc">在 Worker 里校验 <code>Authorization: Bearer &lt;key&gt;</code> header，Key 存在 Workers Secrets 里（<code>wrangler secret put API_KEY</code>），防止任何人都能上传。</div>
+      </div>
+      <div class="summary-card">
+        <div class="emoji">🗑️</div>
+        <div class="s-title">加删除接口</div>
+        <div class="s-desc">新增 <code>DELETE /images/:key</code> 接口，同时调用 <code>env.BUCKET.delete(key)</code> 删除 R2 文件，以及 <code>env.DB.prepare('DELETE FROM images WHERE key = ?')</code> 清除记录。</div>
+      </div>
+      <div class="summary-card">
+        <div class="emoji">🌐</div>
+        <div class="s-title">绑定自定义域名</div>
+        <div class="s-desc">在 Cloudflare Dashboard → Workers → 你的 Worker → Settings → Domains &amp; Routes，添加自定义域名，让接口变成 <code>https://api.yourdomain.com/upload</code>。</div>
+      </div>
+    </div>
+  </section>
+
   </main>
 </div>
 </body>
