@@ -1,0 +1,1635 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>博客系统实战 · Workers + D1 + R2 · cf.dayushaiwang.com</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;500;700&family=Manrope:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --orange:     #f6821f;
+      --orange-dim: #c96a10;
+      --orange-glow:#f6821f44;
+      --bg:         #080808;
+      --bg-2:       #0f0f0f;
+      --bg-3:       #161616;
+      --bg-4:       #1e1e1e;
+      --border:     #2a2a2a;
+      --border-hot: #f6821f55;
+      --text:       #e8e8e8;
+      --text-dim:   #888;
+      --text-muted: #555;
+      --green:      #4ade80;
+      --blue:       #60a5fa;
+      --purple:     #c084fc;
+      --red:        #f87171;
+      --yellow:     #fbbf24;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; font-size: 16px; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Manrope', sans-serif;
+      font-weight: 400;
+      line-height: 1.7;
+      overflow-x: hidden;
+    }
+
+    ::selection { background: var(--orange-glow); color: var(--orange); }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--orange-dim); border-radius: 3px; }
+
+    /* ─── Layout ─── */
+    .layout {
+      display: grid;
+      grid-template-columns: 268px 1fr;
+      min-height: 100vh;
+    }
+
+    /* ─── Sidebar ─── */
+    .sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      border-right: 1px solid var(--border);
+      background: var(--bg-2);
+      padding: 28px 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .sidebar::-webkit-scrollbar { width: 3px; }
+
+    .sidebar-brand {
+      padding: 0 24px 24px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+    .sidebar-back {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--text-muted);
+      text-decoration: none;
+      margin-bottom: 14px;
+      transition: color 0.2s;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .sidebar-back:hover { color: var(--orange); }
+    .sidebar-back svg { flex-shrink: 0; }
+
+    .brand-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.3;
+      margin-bottom: 4px;
+    }
+    .brand-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .nav-section { padding: 0 12px; margin-bottom: 6px; }
+    .nav-section-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      padding: 10px 10px 5px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 8px 10px;
+      border-radius: 7px;
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+    .nav-item:hover, .nav-item.active {
+      background: var(--bg-4);
+      color: var(--orange);
+    }
+    .nav-dot {
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      flex-shrink: 0;
+      transition: background 0.2s;
+    }
+    .nav-item:hover .nav-dot, .nav-item.active .nav-dot {
+      background: var(--orange);
+      box-shadow: 0 0 6px var(--orange);
+    }
+    .nav-step {
+      margin-left: auto;
+      font-size: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-muted);
+    }
+    .nav-step.done {
+      color: var(--green);
+    }
+
+    .sidebar-footer {
+      margin-top: auto;
+      padding: 16px 24px 0;
+      border-top: 1px solid var(--border);
+    }
+    .sidebar-footer p {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* ─── Main ─── */
+    .main {
+      padding: 0 72px 120px;
+      max-width: 900px;
+    }
+
+    /* ─── Hero ─── */
+    .hero {
+      padding: 72px 0 56px;
+    }
+    .hero-badges { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+      letter-spacing: 0.5px;
+    }
+    .badge-orange { background: var(--orange-glow); color: var(--orange); border: 1px solid var(--border-hot); }
+    .badge-green  { background: rgba(74,222,128,.12); color: var(--green);  border: 1px solid rgba(74,222,128,.25); }
+    .badge-blue   { background: rgba(96,165,250,.12); color: var(--blue);   border: 1px solid rgba(96,165,250,.25); }
+    .badge-purple { background: rgba(192,132,252,.12);color: var(--purple); border: 1px solid rgba(192,132,252,.25); }
+
+    .hero h1 {
+      font-size: 42px;
+      font-weight: 800;
+      line-height: 1.2;
+      margin-bottom: 18px;
+      letter-spacing: -0.5px;
+    }
+    .hero h1 span { color: var(--orange); }
+    .hero p {
+      font-size: 17px;
+      color: var(--text-dim);
+      max-width: 600px;
+      line-height: 1.8;
+    }
+
+    /* ─── Architecture Overview ─── */
+    .arch-diagram {
+      background: var(--bg-3);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px;
+      margin: 32px 0;
+    }
+    .arch-diagram h3 {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+      margin-bottom: 20px;
+    }
+    .arch-flow {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      flex-wrap: wrap;
+      row-gap: 12px;
+    }
+    .arch-node {
+      background: var(--bg-4);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 16px;
+      text-align: center;
+      min-width: 100px;
+    }
+    .arch-node.highlight { border-color: var(--orange); }
+    .arch-node .node-icon { font-size: 20px; display: block; margin-bottom: 4px; }
+    .arch-node .node-name { font-size: 12px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+    .arch-node .node-sub { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+    .arch-arrow {
+      color: var(--orange);
+      font-size: 18px;
+      padding: 0 8px;
+      flex-shrink: 0;
+    }
+    .arch-branch {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .arch-branch-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* ─── Section ─── */
+    .section {
+      padding: 56px 0;
+      border-top: 1px solid var(--border);
+    }
+    .section-number {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--orange);
+      font-family: 'JetBrains Mono', monospace;
+      margin-bottom: 10px;
+    }
+    .section h2 {
+      font-size: 30px;
+      font-weight: 800;
+      margin-bottom: 14px;
+      letter-spacing: -0.3px;
+    }
+    .section-intro {
+      font-size: 15px;
+      color: var(--text-dim);
+      margin-bottom: 28px;
+      max-width: 620px;
+      line-height: 1.8;
+    }
+
+    /* ─── Step ─── */
+    .step {
+      background: var(--bg-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+    .step-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      padding: 18px 20px;
+    }
+    .step-num {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      background: var(--orange-glow);
+      border: 1px solid var(--border-hot);
+      color: var(--orange);
+      font-size: 12px;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .step-content h3 { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+    .step-content p { font-size: 14px; color: var(--text-dim); }
+
+    /* ─── Code Block ─── */
+    .code-block {
+      margin: 0 20px 20px;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .code-block-full {
+      margin: 20px 0;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .code-header {
+      background: var(--bg-3);
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+    }
+    .code-lang {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: var(--orange);
+      font-family: 'JetBrains Mono', monospace;
+      text-transform: uppercase;
+    }
+    .code-filename {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .copy-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 3px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .copy-btn:hover { border-color: var(--orange); color: var(--orange); }
+    pre {
+      background: #0d1117;
+      padding: 16px 20px;
+      overflow-x: auto;
+      font-size: 13.5px;
+      line-height: 1.65;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    /* Syntax colors */
+    .kw  { color: #ff7b72; }
+    .st  { color: #a5d6ff; }
+    .cm  { color: #6e7681; font-style: italic; }
+    .fn  { color: #d2a8ff; }
+    .nm  { color: #79c0ff; }
+    .vr  { color: #ffa657; }
+    .pr  { color: #7ee787; }
+    .op  { color: #ff7b72; }
+
+    /* ─── Callout ─── */
+    .callout {
+      border-left: 3px solid;
+      padding: 14px 18px;
+      border-radius: 0 8px 8px 0;
+      margin: 20px 0;
+      font-size: 14px;
+    }
+    .callout-tip     { border-color: var(--green);  background: rgba(74,222,128,.08); }
+    .callout-warn    { border-color: var(--yellow); background: rgba(251,191,36,.08); }
+    .callout-info    { border-color: var(--blue);   background: rgba(96,165,250,.08); }
+    .callout-title {
+      font-weight: 700;
+      font-size: 12px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      font-family: 'JetBrains Mono', monospace;
+      margin-bottom: 6px;
+    }
+    .callout-tip  .callout-title { color: var(--green); }
+    .callout-warn .callout-title { color: var(--yellow); }
+    .callout-info .callout-title { color: var(--blue); }
+    .callout p { color: var(--text-dim); }
+
+    /* ─── Table ─── */
+    .tbl {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13.5px;
+      margin: 20px 0;
+    }
+    .tbl th {
+      background: var(--bg-3);
+      color: var(--text-dim);
+      font-weight: 700;
+      font-size: 11px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 10px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    .tbl td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-dim);
+      vertical-align: top;
+    }
+    .tbl tr:last-child td { border-bottom: none; }
+    .tbl tr:hover td { background: var(--bg-3); }
+    .tbl td:first-child { color: var(--text); font-weight: 600; font-family: 'JetBrains Mono', monospace; font-size: 13px; }
+
+    /* ─── File Tree ─── */
+    .filetree {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px 20px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      line-height: 2;
+      margin: 20px 0;
+    }
+    .filetree .dir  { color: var(--blue); }
+    .filetree .file { color: var(--text-dim); }
+    .filetree .new  { color: var(--green); }
+    .filetree .key  { color: var(--orange); }
+    .filetree .indent { padding-left: 20px; }
+    .filetree .indent2 { padding-left: 40px; }
+
+    /* ─── API Card ─── */
+    .api-card {
+      background: var(--bg-3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+    .api-method {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 4px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .method-get    { background: rgba(74,222,128,.15);  color: var(--green);  border: 1px solid rgba(74,222,128,.3); }
+    .method-post   { background: rgba(96,165,250,.15);  color: var(--blue);   border: 1px solid rgba(96,165,250,.3); }
+    .method-put    { background: rgba(251,191,36,.15);  color: var(--yellow); border: 1px solid rgba(251,191,36,.3); }
+    .method-delete { background: rgba(248,113,113,.15); color: var(--red);    border: 1px solid rgba(248,113,113,.3); }
+    .api-path {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .api-desc { font-size: 13px; color: var(--text-muted); }
+
+    /* ─── Test Block ─── */
+    .test-block {
+      background: var(--bg-3);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+    .test-block h4 {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-dim);
+      font-family: 'JetBrains Mono', monospace;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 12px;
+    }
+
+    /* ─── Progress Tracker ─── */
+    .progress-track {
+      background: var(--bg-2);
+      border: 1px solid var(--border-hot);
+      border-radius: 12px;
+      padding: 24px 28px;
+      margin: 40px 0;
+    }
+    .progress-track h3 {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--orange);
+      margin-bottom: 16px;
+      font-family: 'JetBrains Mono', monospace;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .progress-items { display: flex; flex-direction: column; gap: 10px; }
+    .progress-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      color: var(--text-dim);
+    }
+    .progress-item .check {
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+    }
+    .progress-item.done .check { background: var(--green); border-color: var(--green); color: #000; }
+
+    /* ─── Responsive ─── */
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { position: relative; height: auto; }
+      .main { padding: 0 24px 80px; }
+      .hero h1 { font-size: 28px; }
+    }
+
+    /* ─── Reveal animation ─── */
+    .reveal {
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+    .reveal.visible { opacity: 1; transform: none; }
+
+    /* ─── inline code ─── */
+    code {
+      background: var(--bg-4);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      color: var(--orange);
+    }
+
+    /* ─── ul/ol ─── */
+    .prose ul, .prose ol {
+      padding-left: 20px;
+      color: var(--text-dim);
+      font-size: 14.5px;
+      line-height: 2;
+      margin: 12px 0;
+    }
+    .prose li::marker { color: var(--orange); }
+
+    /* 分割线 */
+    .divider { border: none; border-top: 1px solid var(--border); margin: 48px 0; }
+  </style>
+</head>
+<body>
+
+<div class="layout">
+
+  <!-- ─── Sidebar ─── -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <a class="sidebar-back" href="index.html">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+        返回首页
+      </a>
+      <div class="brand-title">博客系统实战</div>
+      <div class="brand-sub">Workers · D1 · R2 · Vue</div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-section-label">项目概览</div>
+      <a class="nav-item active" href="#overview">
+        <span class="nav-dot"></span>架构 &amp; 技术栈
+      </a>
+      <a class="nav-item" href="#prerequisites">
+        <span class="nav-dot"></span>前置准备
+      </a>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-section-label">后端 Workers API</div>
+      <a class="nav-item" href="#step1">
+        <span class="nav-dot"></span>Step 1 · 初始化项目
+      </a>
+      <a class="nav-item" href="#step2">
+        <span class="nav-dot"></span>Step 2 · 创建 D1 数据库
+      </a>
+      <a class="nav-item" href="#step3">
+        <span class="nav-dot"></span>Step 3 · 写 API 接口
+      </a>
+      <a class="nav-item" href="#step4">
+        <span class="nav-dot"></span>Step 4 · 配置 R2 存图片
+      </a>
+      <a class="nav-item" href="#step5">
+        <span class="nav-dot"></span>Step 5 · 本地测试
+      </a>
+      <a class="nav-item" href="#step6">
+        <span class="nav-dot"></span>Step 6 · 部署上线
+      </a>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-section-label">前端对接</div>
+      <a class="nav-item" href="#step7">
+        <span class="nav-dot"></span>Step 7 · Vue 对接接口
+      </a>
+      <a class="nav-item" href="#step8">
+        <span class="nav-dot"></span>Step 8 · 图片上传
+      </a>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-section-label">完成</div>
+      <a class="nav-item" href="#done">
+        <span class="nav-dot"></span>验收 &amp; 下一步
+      </a>
+    </div>
+
+    <div class="sidebar-footer">
+      <p>适合 Java + Vue 开发者</p>
+      <p style="margin-top:4px; color: var(--orange);">零服务器费用</p>
+    </div>
+  </aside>
+
+  <!-- ─── Main Content ─── -->
+  <main class="main">
+
+    <!-- Hero -->
+    <div class="hero reveal" id="overview">
+      <div class="hero-badges">
+        <span class="badge badge-orange">实战项目</span>
+        <span class="badge badge-blue">Workers</span>
+        <span class="badge badge-green">D1 数据库</span>
+        <span class="badge badge-purple">R2 存储</span>
+      </div>
+      <h1>用 <span>Workers + D1 + R2</span><br>做一个博客系统</h1>
+      <p>
+        以一个完整的博客系统为案例，手把手带你从零开始构建后端 API、连接数据库、处理图片上传，最后用 Vue 对接。
+        整个项目<strong style="color:var(--text)">不需要购买服务器</strong>，全部运行在 Cloudflare 免费套餐上。
+      </p>
+    </div>
+
+    <!-- Architecture -->
+    <div class="arch-diagram reveal">
+      <h3>系统架构一览</h3>
+      <div class="arch-flow">
+        <div class="arch-node">
+          <span class="node-icon">🖥️</span>
+          <div class="node-name">Vue 前端</div>
+          <div class="node-sub">Pages 部署</div>
+        </div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-node highlight">
+          <span class="node-icon">⚡</span>
+          <div class="node-name">Workers</div>
+          <div class="node-sub">API 层（你的后端）</div>
+        </div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-branch">
+          <div class="arch-branch-item">
+            <div class="arch-node">
+              <span class="node-icon">🗄️</span>
+              <div class="node-name">D1</div>
+              <div class="node-sub">文章 / 用户数据</div>
+            </div>
+          </div>
+          <div class="arch-branch-item">
+            <div class="arch-node">
+              <span class="node-icon">🪣</span>
+              <div class="node-name">R2</div>
+              <div class="node-sub">封面图片</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 类比说明 -->
+    <div class="callout callout-info reveal">
+      <div class="callout-title">💡 给 Java 开发者的类比</div>
+      <p>
+        <strong style="color:var(--text)">Workers</strong> = Spring Boot Controller（接收请求、处理逻辑、返回 JSON）<br>
+        <strong style="color:var(--text)">D1</strong> = MySQL（用 SQL 建表、增删改查，语法几乎一样）<br>
+        <strong style="color:var(--text)">R2</strong> = 阿里云 OSS（存图片/文件，有 API 可读写）<br>
+        <strong style="color:var(--text)">wrangler</strong> = Maven + Spring Boot CLI（项目管理 + 本地启动工具）
+      </p>
+    </div>
+
+    <!-- API 列表 -->
+    <div class="section reveal" id="prerequisites">
+      <div class="section-number">准备阶段</div>
+      <h2>我们要做什么接口？</h2>
+      <p class="section-intro">这个博客系统包含以下 API，你可以类比自己写 Spring Boot Controller 时定义的 @RequestMapping。</p>
+
+      <div class="api-card">
+        <span class="api-method method-get">GET</span>
+        <div>
+          <div class="api-path">/api/posts</div>
+          <div class="api-desc">获取文章列表（支持分页）</div>
+        </div>
+      </div>
+      <div class="api-card">
+        <span class="api-method method-get">GET</span>
+        <div>
+          <div class="api-path">/api/posts/:id</div>
+          <div class="api-desc">获取单篇文章详情</div>
+        </div>
+      </div>
+      <div class="api-card">
+        <span class="api-method method-post">POST</span>
+        <div>
+          <div class="api-path">/api/posts</div>
+          <div class="api-desc">创建新文章（需 token 鉴权）</div>
+        </div>
+      </div>
+      <div class="api-card">
+        <span class="api-method method-put">PUT</span>
+        <div>
+          <div class="api-path">/api/posts/:id</div>
+          <div class="api-desc">更新文章</div>
+        </div>
+      </div>
+      <div class="api-card">
+        <span class="api-method method-delete">DELETE</span>
+        <div>
+          <div class="api-path">/api/posts/:id</div>
+          <div class="api-desc">删除文章</div>
+        </div>
+      </div>
+      <div class="api-card">
+        <span class="api-method method-post">POST</span>
+        <div>
+          <div class="api-path">/api/upload</div>
+          <div class="api-desc">上传封面图片到 R2（返回图片 URL）</div>
+        </div>
+      </div>
+
+      <div class="callout callout-warn" style="margin-top:24px">
+        <div class="callout-title">⚠️ 前置条件</div>
+        <p>
+          1. 已有 Cloudflare 账号（免费注册）<br>
+          2. 安装 Node.js 18+（<code>node -v</code> 查看）<br>
+          3. 有 Vue 项目基础（会用 axios 就够了）
+        </p>
+      </div>
+    </div>
+
+    <!-- ───────────── STEP 1 ───────────── -->
+    <div class="section reveal" id="step1">
+      <div class="section-number">Step 1 / 8</div>
+      <h2>初始化 Workers 项目</h2>
+      <p class="section-intro">
+        Wrangler 是 Cloudflare 官方的 CLI 工具，相当于 Spring Boot 的 Maven 插件。我们用它来创建项目、本地开发、部署。
+      </p>
+
+      <div class="step">
+        <div class="step-header">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <h3>全局安装 Wrangler</h3>
+            <p>只需安装一次，后续所有 Cloudflare 项目都用它</p>
+          </div>
+        </div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">TERMINAL</span>
+            <button class="copy-btn" onclick="copyCode(this)">复制</button>
+          </div>
+          <pre>npm install -g wrangler
+
+<span class="cm"># 安装完验证版本</span>
+wrangler --version</pre>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-header">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <h3>登录 Cloudflare 账号</h3>
+            <p>会自动打开浏览器，点击授权即可</p>
+          </div>
+        </div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">TERMINAL</span>
+            <button class="copy-btn" onclick="copyCode(this)">复制</button>
+          </div>
+          <pre>wrangler login</pre>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-header">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <h3>创建 Workers 项目</h3>
+            <p>选择 "Hello World" 模板，语言选 JavaScript（或 TypeScript 都行）</p>
+          </div>
+        </div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">TERMINAL</span>
+            <button class="copy-btn" onclick="copyCode(this)">复制</button>
+          </div>
+          <pre>npm create cloudflare@latest blog-api
+
+<span class="cm"># 选项：</span>
+<span class="cm"># ✓ What type of application? → "Hello World" Worker</span>
+<span class="cm"># ✓ Language? → JavaScript</span>
+<span class="cm"># ✓ Deploy now? → No（我们先在本地开发）</span>
+
+cd blog-api</pre>
+        </div>
+      </div>
+
+      <p style="font-size:14px; color:var(--text-dim); margin-top:8px;">生成的项目结构如下：</p>
+
+      <div class="filetree">
+        <span class="dir">blog-api/</span><br>
+        <span class="indent file">├── src/</span><br>
+        <span class="indent2 key">│   └── index.js</span> &nbsp;<span class="cm" style="font-size:12px">← 这就是你的"Controller 入口"</span><br>
+        <span class="indent file">├── wrangler.toml</span> &nbsp;<span class="cm" style="font-size:12px">← 相当于 application.yml</span><br>
+        <span class="indent file">└── package.json</span>
+      </div>
+    </div>
+
+    <!-- ───────────── STEP 2 ───────────── -->
+    <div class="section reveal" id="step2">
+      <div class="section-number">Step 2 / 8</div>
+      <h2>创建 D1 数据库 &amp; 建表</h2>
+      <p class="section-intro">
+        D1 是 Cloudflare 托管的 SQLite。你之前用 MySQL 怎么建表，D1 就怎么写 SQL，语法几乎一样。
+      </p>
+
+      <div class="step">
+        <div class="step-header">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <h3>创建 D1 数据库实例</h3>
+            <p>执行后会输出一个 database_id，记下来待会要用</p>
+          </div>
+        </div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">TERMINAL</span>
+            <button class="copy-btn" onclick="copyCode(this)">复制</button>
+          </div>
+          <pre>wrangler d1 create blog-db
+
+<span class="cm"># 输出示例：</span>
+<span class="pr">✅ Successfully created DB 'blog-db'</span>
+<span class="pr">database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"</span></pre>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-header">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <h3>在 wrangler.toml 中绑定数据库</h3>
+            <p>把 database_id 填入配置文件，相当于 application.yml 配置数据源</p>
+          </div>
+        </div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">TOML</span>
+            <span class="code-filename">wrangler.toml</span>
+            <button class="copy-btn" onclick="copyCode(this)">复制</button>
+          </div>
+          <pre>name = <span class="st">"blog-api"</span>
+main = <span class="st">"src/index.js"</span>
+compatibility_date = <span class="st">"2024-01-01"</span>
+
+<span class="cm"># 绑定 D1 数据库</span>
+[[d1_databases]]
+binding = <span class="st">"DB"</span>              <span class="cm"># 在代码里用 env.DB 访问</span>
+database_name = <span class="st">"blog-db"</span>
+database_id = <span class="st">"你的-database-id"</span>  <span class="cm"># ← 替换成上一步输出的 id</span>
+
+<span class="cm"># 绑定 R2（Step 4 会用到）</span>
+[[r2_buckets]]
+binding = <span class="st">"IMAGES"</span>           <span class="cm"># 在代码里用 env.IMAGES 访问</span>
+bucket_name = <span class="st">"blog-images"</span></pre>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-header">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <h3>创建 SQL 初始化文件并建表</h3>
+            <p>在项目根目录新建 schema.sql，写建表语句</p>
+          </div>
+        </div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">SQL</span>
+            <span class="code-filename">schema.sql</span>
+            <button class="copy-btn" onclick="copyCode(this)">复制</button>
+          </div>
+          <pre><span class="cm">-- 文章表（对标你 MySQL 里的 posts 表）</span>
+<span class="kw">CREATE TABLE IF NOT EXISTS</span> posts (
+  id        <span class="nm">INTEGER PRIMARY KEY AUTOINCREMENT</span>,
+  title     <span class="nm">TEXT NOT NULL</span>,
+  content   <span class="nm">TEXT NOT NULL</span>,
+  cover_url <span class="nm">TEXT</span>,           <span class="cm">-- R2 图片链接</span>
+  author    <span class="nm">TEXT</span>,
+  created_at <span class="nm">DATETIME DEFAULT</span> (datetime(<span class="st">'now'</span>)),
+  updated_at <span class="nm">DATETIME DEFAULT</span> (datetime(<span class="st">'now'</span>))
+);
+
+<span class="cm">-- 插入两条测试数据</span>
+<span class="kw">INSERT INTO</span> posts (title, content, author) <span class="kw">VALUES</span>
+  (<span class="st">'我的第一篇博客'</span>, <span class="st">'Hello Cloudflare Workers！'</span>, <span class="st">'王文'</span>),
+  (<span class="st">'Workers vs Spring Boot'</span>, <span class="st">'两者的对比与适用场景...'</span>, <span class="st">'王文'</span>);</pre>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-header">
+          <div class="step-num">4</div>
+          <div class="step-content">
+            <h3>执行 SQL 建表</h3>
+            <p>先在本地执行（--local），确认没问题后再同步到线上</p>
+          </div>
+        </div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">TERMINAL</span>
+            <button class="copy-btn" onclick="copyCode(this)">复制</button>
+          </div>
+          <pre><span class="cm"># 本地执行（开发用）</span>
+wrangler d1 execute blog-db --local --file=schema.sql
+
+<span class="cm"># 线上执行（部署后用）</span>
+wrangler d1 execute blog-db --file=schema.sql
+
+<span class="cm"># 验证：查询一下数据</span>
+wrangler d1 execute blog-db --local --command="SELECT * FROM posts"</pre>
+        </div>
+      </div>
+
+      <div class="callout callout-tip">
+        <div class="callout-title">✅ 你学到了什么</div>
+        <p>D1 就是用命令行管理的 MySQL。建表、插数据的 SQL 语法几乎一样，只是用 <code>wrangler d1 execute</code> 替代了 MySQL 命令行客户端。</p>
+      </div>
+    </div>
+
+    <!-- ───────────── STEP 3 ───────────── -->
+    <div class="section reveal" id="step3">
+      <div class="section-number">Step 3 / 8</div>
+      <h2>写 Workers API 接口</h2>
+      <p class="section-intro">
+        现在打开 <code>src/index.js</code>，把它改成我们的博客 API。
+        这就是你写 Spring Boot Controller 的地方，只不过换成了 JS。
+      </p>
+
+      <div class="callout callout-info" style="margin-bottom:20px;">
+        <div class="callout-title">🔑 核心概念</div>
+        <p>
+          Workers 只有一个入口函数 <code>fetch(request, env)</code>，所有请求都从这里进来。
+          <code>env.DB</code> 就是你的 D1 数据库连接，<code>env.IMAGES</code> 是 R2 存储桶。
+          我们用 URL 路径判断该走哪个逻辑，类似 Spring 的路由分发。
+        </p>
+      </div>
+
+      <div class="code-block-full">
+        <div class="code-header">
+          <span class="code-lang">JAVASCRIPT</span>
+          <span class="code-filename">src/index.js &nbsp;（完整代码）</span>
+          <button class="copy-btn" onclick="copyCode(this)">复制全部</button>
+        </div>
+        <pre><span class="cm">// ─── 工具函数：生成 JSON 响应（相当于 ResponseEntity）</span>
+<span class="kw">function</span> <span class="fn">json</span>(data, status = <span class="nm">200</span>) {
+  <span class="kw">return new</span> <span class="fn">Response</span>(<span class="fn">JSON.stringify</span>(data), {
+    status,
+    headers: {
+      <span class="st">'Content-Type'</span>: <span class="st">'application/json'</span>,
+      <span class="st">'Access-Control-Allow-Origin'</span>: <span class="st">'*'</span>,   <span class="cm">// 允许跨域（Vue 前端需要）</span>
+    }
+  });
+}
+
+<span class="cm">// ─── 主入口（相当于 DispatcherServlet）</span>
+<span class="kw">export default</span> {
+  <span class="kw">async</span> <span class="fn">fetch</span>(request, env) {
+    <span class="kw">const</span> url = <span class="kw">new</span> <span class="fn">URL</span>(request.url);
+    <span class="kw">const</span> path = url.pathname;
+    <span class="kw">const</span> method = request.method;
+
+    <span class="cm">// 处理 OPTIONS 预检请求（跨域必须）</span>
+    <span class="kw">if</span> (method === <span class="st">'OPTIONS'</span>) {
+      <span class="kw">return new</span> <span class="fn">Response</span>(<span class="kw">null</span>, {
+        headers: {
+          <span class="st">'Access-Control-Allow-Origin'</span>: <span class="st">'*'</span>,
+          <span class="st">'Access-Control-Allow-Methods'</span>: <span class="st">'GET, POST, PUT, DELETE'</span>,
+          <span class="st">'Access-Control-Allow-Headers'</span>: <span class="st">'Content-Type, Authorization'</span>,
+        }
+      });
+    }
+
+    <span class="cm">// ─── 路由分发（相当于 @RequestMapping）</span>
+    <span class="kw">if</span> (path === <span class="st">'/api/posts'</span> && method === <span class="st">'GET'</span>)    <span class="kw">return</span> <span class="fn">getPosts</span>(request, env);
+    <span class="kw">if</span> (path === <span class="st">'/api/posts'</span> && method === <span class="st">'POST'</span>)   <span class="kw">return</span> <span class="fn">createPost</span>(request, env);
+    <span class="kw">if</span> (path.startsWith(<span class="st">'/api/posts/'</span>) && method === <span class="st">'GET'</span>)    <span class="kw">return</span> <span class="fn">getPost</span>(request, env, path);
+    <span class="kw">if</span> (path.startsWith(<span class="st">'/api/posts/'</span>) && method === <span class="st">'PUT'</span>)    <span class="kw">return</span> <span class="fn">updatePost</span>(request, env, path);
+    <span class="kw">if</span> (path.startsWith(<span class="st">'/api/posts/'</span>) && method === <span class="st">'DELETE'</span>) <span class="kw">return</span> <span class="fn">deletePost</span>(request, env, path);
+    <span class="kw">if</span> (path === <span class="st">'/api/upload'</span> && method === <span class="st">'POST'</span>)  <span class="kw">return</span> <span class="fn">uploadImage</span>(request, env);
+
+    <span class="kw">return</span> <span class="fn">json</span>({ error: <span class="st">'Not Found'</span> }, <span class="nm">404</span>);
+  }
+};
+
+<span class="cm">// ─── GET /api/posts ─── 获取文章列表</span>
+<span class="kw">async function</span> <span class="fn">getPosts</span>(request, env) {
+  <span class="kw">const</span> url = <span class="kw">new</span> <span class="fn">URL</span>(request.url);
+  <span class="kw">const</span> page = <span class="fn">parseInt</span>(url.searchParams.<span class="fn">get</span>(<span class="st">'page'</span>)) || <span class="nm">1</span>;
+  <span class="kw">const</span> pageSize = <span class="nm">10</span>;
+  <span class="kw">const</span> offset = (page - <span class="nm">1</span>) * pageSize;
+
+  <span class="cm">// SQL 查询（相当于 Mapper.selectPage()）</span>
+  <span class="kw">const</span> { results } = <span class="kw">await</span> env.DB
+    .<span class="fn">prepare</span>(<span class="st">'SELECT id, title, author, cover_url, created_at FROM posts ORDER BY created_at DESC LIMIT ? OFFSET ?'</span>)
+    .<span class="fn">bind</span>(pageSize, offset)
+    .<span class="fn">all</span>();
+
+  <span class="kw">const</span> total = <span class="kw">await</span> env.DB
+    .<span class="fn">prepare</span>(<span class="st">'SELECT COUNT(*) as count FROM posts'</span>)
+    .<span class="fn">first</span>();
+
+  <span class="kw">return</span> <span class="fn">json</span>({ data: results, total: total.count, page });
+}
+
+<span class="cm">// ─── GET /api/posts/:id ─── 获取单篇文章</span>
+<span class="kw">async function</span> <span class="fn">getPost</span>(request, env, path) {
+  <span class="kw">const</span> id = path.<span class="fn">split</span>(<span class="st">'/'</span>).<span class="fn">pop</span>();
+  <span class="kw">const</span> post = <span class="kw">await</span> env.DB
+    .<span class="fn">prepare</span>(<span class="st">'SELECT * FROM posts WHERE id = ?'</span>)
+    .<span class="fn">bind</span>(id)
+    .<span class="fn">first</span>();
+
+  <span class="kw">if</span> (!post) <span class="kw">return</span> <span class="fn">json</span>({ error: <span class="st">'文章不存在'</span> }, <span class="nm">404</span>);
+  <span class="kw">return</span> <span class="fn">json</span>(post);
+}
+
+<span class="cm">// ─── POST /api/posts ─── 创建文章</span>
+<span class="kw">async function</span> <span class="fn">createPost</span>(request, env) {
+  <span class="cm">// 简单的 Token 鉴权（生产环境请换 JWT）</span>
+  <span class="kw">const</span> token = request.headers.<span class="fn">get</span>(<span class="st">'Authorization'</span>);
+  <span class="kw">if</span> (token !== <span class="st">'Bearer my-secret-token'</span>) {
+    <span class="kw">return</span> <span class="fn">json</span>({ error: <span class="st">'未授权'</span> }, <span class="nm">401</span>);
+  }
+
+  <span class="kw">const</span> body = <span class="kw">await</span> request.<span class="fn">json</span>();
+  <span class="kw">const</span> { title, content, author, cover_url } = body;
+
+  <span class="kw">if</span> (!title || !content) {
+    <span class="kw">return</span> <span class="fn">json</span>({ error: <span class="st">'标题和内容不能为空'</span> }, <span class="nm">400</span>);
+  }
+
+  <span class="kw">const</span> result = <span class="kw">await</span> env.DB
+    .<span class="fn">prepare</span>(<span class="st">'INSERT INTO posts (title, content, author, cover_url) VALUES (?, ?, ?, ?)'</span>)
+    .<span class="fn">bind</span>(title, content, author || <span class="st">'匿名'</span>, cover_url || <span class="kw">null</span>)
+    .<span class="fn">run</span>();
+
+  <span class="kw">return</span> <span class="fn">json</span>({ id: result.meta.last_row_id, message: <span class="st">'发布成功'</span> }, <span class="nm">201</span>);
+}
+
+<span class="cm">// ─── PUT /api/posts/:id ─── 更新文章</span>
+<span class="kw">async function</span> <span class="fn">updatePost</span>(request, env, path) {
+  <span class="kw">const</span> id = path.<span class="fn">split</span>(<span class="st">'/'</span>).<span class="fn">pop</span>();
+  <span class="kw">const</span> body = <span class="kw">await</span> request.<span class="fn">json</span>();
+  <span class="kw">const</span> { title, content, cover_url } = body;
+
+  <span class="kw">await</span> env.DB
+    .<span class="fn">prepare</span>(<span class="st">'UPDATE posts SET title=?, content=?, cover_url=?, updated_at=datetime("now") WHERE id=?'</span>)
+    .<span class="fn">bind</span>(title, content, cover_url, id)
+    .<span class="fn">run</span>();
+
+  <span class="kw">return</span> <span class="fn">json</span>({ message: <span class="st">'更新成功'</span> });
+}
+
+<span class="cm">// ─── DELETE /api/posts/:id ─── 删除文章</span>
+<span class="kw">async function</span> <span class="fn">deletePost</span>(request, env, path) {
+  <span class="kw">const</span> id = path.<span class="fn">split</span>(<span class="st">'/'</span>).<span class="fn">pop</span>();
+  <span class="kw">await</span> env.DB
+    .<span class="fn">prepare</span>(<span class="st">'DELETE FROM posts WHERE id = ?'</span>)
+    .<span class="fn">bind</span>(id)
+    .<span class="fn">run</span>();
+  <span class="kw">return</span> <span class="fn">json</span>({ message: <span class="st">'删除成功'</span> });
+}
+
+<span class="cm">// ─── POST /api/upload ─── 上传图片到 R2</span>
+<span class="kw">async function</span> <span class="fn">uploadImage</span>(request, env) {
+  <span class="kw">const</span> formData = <span class="kw">await</span> request.<span class="fn">formData</span>();
+  <span class="kw">const</span> file = formData.<span class="fn">get</span>(<span class="st">'file'</span>);
+
+  <span class="kw">if</span> (!file) <span class="kw">return</span> <span class="fn">json</span>({ error: <span class="st">'没有文件'</span> }, <span class="nm">400</span>);
+
+  <span class="kw">const</span> filename = <span class="st">`covers/</span><span class="vr">${Date.now()}</span><span class="st">-</span><span class="vr">${file.name}</span><span class="st">`</span>;
+  <span class="kw">await</span> env.IMAGES.<span class="fn">put</span>(filename, file.stream(), {
+    httpMetadata: { contentType: file.type }
+  });
+
+  <span class="cm">// 返回公开访问 URL（需要 R2 开启公开访问，Step 4 有说明）</span>
+  <span class="kw">const</span> publicUrl = <span class="st">`https://images.你的域名.com/</span><span class="vr">${filename}</span><span class="st">`</span>;
+  <span class="kw">return</span> <span class="fn">json</span>({ url: publicUrl });
+}</pre>
+      </div>
+
+      <div class="callout callout-tip">
+        <div class="callout-title">✅ 对比理解</div>
+        <p>
+          <code>env.DB.prepare(sql).bind(...).all()</code> → 相当于 MyBatis 的 <code>mapper.selectList()</code><br>
+          <code>.first()</code> → 相当于 <code>mapper.selectById()</code><br>
+          <code>.run()</code> → 相当于 <code>mapper.insert() / update() / delete()</code>
+        </p>
+      </div>
+    </div>
+
+    <!-- ───────────── STEP 4 ───────────── -->
+    <div class="section reveal" id="step4">
+      <div class="section-number">Step 4 / 8</div>
+      <h2>创建 R2 存储桶（存封面图片）</h2>
+      <p class="section-intro">R2 就是 Cloudflare 版的阿里云 OSS。我们用它来存博客封面图，上传后得到一个公开 URL。</p>
+
+      <div class="step">
+        <div class="step-header">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <h3>创建 R2 存储桶</h3>
+            <p>执行以下命令，Cloudflare 控制台会出现一个名叫 blog-images 的 bucket</p>
+          </div>
+        </div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">TERMINAL</span>
+            <button class="copy-btn" onclick="copyCode(this)">复制</button>
+          </div>
+          <pre>wrangler r2 bucket create blog-images</pre>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-header">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <h3>开启公开访问（让图片有公网 URL）</h3>
+            <p>登录 Cloudflare Dashboard → R2 → blog-images → Settings → Public Access → 开启</p>
+          </div>
+        </div>
+        <div class="callout callout-warn" style="margin: 0 20px 20px;">
+          <div class="callout-title">⚠️ 注意</div>
+          <p>开启公开访问后，R2 会给你一个 <code>*.r2.dev</code> 的公共域名，也可以绑定自己的域名。把这个域名填入 Step 3 的 <code>publicUrl</code> 变量中。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-header">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <h3>更新 index.js 中的图片域名</h3>
+            <p>把占位符替换成你的实际 R2 公开域名</p>
+          </div>
+        </div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">JAVASCRIPT</span>
+            <span class="code-filename">src/index.js</span>
+            <button class="copy-btn" onclick="copyCode(this)">复制</button>
+          </div>
+          <pre><span class="cm">// 把这行</span>
+<span class="kw">const</span> publicUrl = <span class="st">`https://images.你的域名.com/${filename}`</span>;
+
+<span class="cm">// 改成你的 R2 公开域名，例如：</span>
+<span class="kw">const</span> publicUrl = <span class="st">`https://pub-xxxxxx.r2.dev/${filename}`</span>;</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- ───────────── STEP 5 ───────────── -->
+    <div class="section reveal" id="step5">
+      <div class="section-number">Step 5 / 8</div>
+      <h2>本地启动 &amp; 测试接口</h2>
+      <p class="section-intro">在部署上线前，先在本地跑起来验证每个接口是否正常。</p>
+
+      <div class="step">
+        <div class="step-header">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <h3>启动本地开发服务器</h3>
+            <p>wrangler dev 会在本地模拟 Workers + D1 环境</p>
+          </div>
+        </div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">TERMINAL</span>
+            <button class="copy-btn" onclick="copyCode(this)">复制</button>
+          </div>
+          <pre>wrangler dev --local
+
+<span class="cm"># 成功后会输出：</span>
+<span class="pr">⎷ Ready on http://localhost:8787</span></pre>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-header">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <h3>用 curl 测试接口</h3>
+            <p>打开新的终端窗口，依次执行以下测试命令</p>
+          </div>
+        </div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">TERMINAL</span>
+            <button class="copy-btn" onclick="copyCode(this)">复制</button>
+          </div>
+          <pre><span class="cm"># 获取文章列表</span>
+curl http://localhost:8787/api/posts
+
+<span class="cm"># 获取单篇文章</span>
+curl http://localhost:8787/api/posts/1
+
+<span class="cm"># 创建新文章（带 token）</span>
+curl -X POST http://localhost:8787/api/posts \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer my-secret-token" \
+  -d '{"title":"测试文章","content":"内容内容内容","author":"王文"}'
+
+<span class="cm"># 删除文章</span>
+curl -X DELETE http://localhost:8787/api/posts/1</pre>
+        </div>
+      </div>
+
+      <div class="callout callout-tip">
+        <div class="callout-title">✅ 预期响应示例</div>
+        <p>
+          GET /api/posts 应返回：<br>
+          <code>{"data":[{"id":1,"title":"我的第一篇博客",...}],"total":2,"page":1}</code>
+        </p>
+      </div>
+    </div>
+
+    <!-- ───────────── STEP 6 ───────────── -->
+    <div class="section reveal" id="step6">
+      <div class="section-number">Step 6 / 8</div>
+      <h2>部署到 Cloudflare 线上</h2>
+      <p class="section-intro">本地测试通过后，一条命令部署到全球边缘节点。</p>
+
+      <div class="step">
+        <div class="step-header">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <h3>先把数据库表同步到线上</h3>
+            <p>线上的 D1 和本地是独立的，需要单独执行一次建表</p>
+          </div>
+        </div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">TERMINAL</span>
+            <button class="copy-btn" onclick="copyCode(this)">复制</button>
+          </div>
+          <pre><span class="cm"># 注意：不加 --local，直接同步到远程</span>
+wrangler d1 execute blog-db --file=schema.sql</pre>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-header">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <h3>部署 Workers</h3>
+            <p>一条命令，30 秒内全球生效</p>
+          </div>
+        </div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">TERMINAL</span>
+            <button class="copy-btn" onclick="copyCode(this)">复制</button>
+          </div>
+          <pre>wrangler deploy
+
+<span class="cm"># 成功后输出：</span>
+<span class="pr">✅ Deployed blog-api to https://blog-api.你的账号.workers.dev</span></pre>
+        </div>
+      </div>
+
+      <div class="callout callout-info">
+        <div class="callout-title">🌍 部署成功后</div>
+        <p>
+          你的 API 现在全球可访问：<br>
+          <code>https://blog-api.你的账号.workers.dev/api/posts</code><br><br>
+          后续如果配置了 CI/CD（GitHub Actions），每次 git push 会自动重新部署，不用手动执行命令。
+        </p>
+      </div>
+    </div>
+
+    <!-- ───────────── STEP 7 ───────────── -->
+    <div class="section reveal" id="step7">
+      <div class="section-number">Step 7 / 8</div>
+      <h2>Vue 前端对接 Workers API</h2>
+      <p class="section-intro">
+        Workers 就是一个标准的 REST API，你的 Vue 项目用 axios 调用它，和之前调 Spring Boot 接口完全一样。
+      </p>
+
+      <div class="step">
+        <div class="step-header">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <h3>配置 API 基础地址</h3>
+            <p>在 Vue 项目的 .env 文件中配置，方便本地和生产环境切换</p>
+          </div>
+        </div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">ENV</span>
+            <span class="code-filename">.env.development</span>
+            <button class="copy-btn" onclick="copyCode(this)">复制</button>
+          </div>
+          <pre>VITE_API_BASE=http://localhost:8787</pre>
+        </div>
+        <div class="code-block" style="margin-top:8px;">
+          <div class="code-header">
+            <span class="code-lang">ENV</span>
+            <span class="code-filename">.env.production</span>
+            <button class="copy-btn" onclick="copyCode(this)">复制</button>
+          </div>
+          <pre>VITE_API_BASE=https://blog-api.你的账号.workers.dev</pre>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-header">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <h3>封装 API 模块</h3>
+            <p>新建 src/api/blog.js，和你平时写的 service 层一样</p>
+          </div>
+        </div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">JAVASCRIPT</span>
+            <span class="code-filename">src/api/blog.js</span>
+            <button class="copy-btn" onclick="copyCode(this)">复制</button>
+          </div>
+          <pre><span class="kw">import</span> axios <span class="kw">from</span> <span class="st">'axios'</span>
+
+<span class="kw">const</span> api = axios.<span class="fn">create</span>({
+  baseURL: <span class="vr">import.meta.env</span>.VITE_API_BASE,
+  headers: { <span class="st">'Content-Type'</span>: <span class="st">'application/json'</span> }
+})
+
+<span class="cm">// 获取文章列表</span>
+<span class="kw">export const</span> <span class="fn">getPosts</span> = (page = <span class="nm">1</span>) =>
+  api.<span class="fn">get</span>(<span class="st">`/api/posts?page=</span><span class="vr">${page}</span><span class="st">`</span>)
+
+<span class="cm">// 获取文章详情</span>
+<span class="kw">export const</span> <span class="fn">getPost</span> = (id) =>
+  api.<span class="fn">get</span>(<span class="st">`/api/posts/</span><span class="vr">${id}</span><span class="st">`</span>)
+
+<span class="cm">// 发布文章（需要 token）</span>
+<span class="kw">export const</span> <span class="fn">createPost</span> = (data, token) =>
+  api.<span class="fn">post</span>(<span class="st">'/api/posts'</span>, data, {
+    headers: { <span class="st">'Authorization'</span>: <span class="st">`Bearer </span><span class="vr">${token}</span><span class="st">`</span> }
+  })
+
+<span class="cm">// 上传图片</span>
+<span class="kw">export const</span> <span class="fn">uploadImage</span> = (file) => {
+  <span class="kw">const</span> form = <span class="kw">new</span> <span class="fn">FormData</span>()
+  form.<span class="fn">append</span>(<span class="st">'file'</span>, file)
+  <span class="kw">return</span> api.<span class="fn">post</span>(<span class="st">'/api/upload'</span>, form, {
+    headers: { <span class="st">'Content-Type'</span>: <span class="st">'multipart/form-data'</span> }
+  })
+}</pre>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-header">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <h3>在组件中使用</h3>
+            <p>和调 Spring Boot 接口完全一样的写法</p>
+          </div>
+        </div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">VUE</span>
+            <span class="code-filename">src/views/BlogList.vue</span>
+            <button class="copy-btn" onclick="copyCode(this)">复制</button>
+          </div>
+          <pre><span class="op">&lt;</span>script setup<span class="op">&gt;</span>
+<span class="kw">import</span> { ref, onMounted } <span class="kw">from</span> <span class="st">'vue'</span>
+<span class="kw">import</span> { getPosts } <span class="kw">from</span> <span class="st">'@/api/blog'</span>
+
+<span class="kw">const</span> posts = <span class="fn">ref</span>([])
+<span class="kw">const</span> loading = <span class="fn">ref</span>(<span class="kw">true</span>)
+
+<span class="fn">onMounted</span>(<span class="kw">async</span> () => {
+  <span class="kw">const</span> { data } = <span class="kw">await</span> <span class="fn">getPosts</span>()
+  posts.value = data.data     <span class="cm">// 赋值给响应式变量</span>
+  loading.value = <span class="kw">false</span>
+})
+<span class="op">&lt;</span>/script<span class="op">&gt;</span>
+
+<span class="op">&lt;</span>template<span class="op">&gt;</span>
+  <span class="op">&lt;</span>div v-if="loading"<span class="op">&gt;</span>加载中...<span class="op">&lt;</span>/div<span class="op">&gt;</span>
+  <span class="op">&lt;</span>div v-else<span class="op">&gt;</span>
+    <span class="op">&lt;</span>div v-for="post in posts" :key="post.id"<span class="op">&gt;</span>
+      <span class="op">&lt;</span>h2<span class="op">&gt;</span>{{ post.title }}<span class="op">&lt;</span>/h2<span class="op">&gt;</span>
+      <span class="op">&lt;</span>p<span class="op">&gt;</span>{{ post.author }} · {{ post.created_at }}<span class="op">&lt;</span>/p<span class="op">&gt;</span>
+      <span class="op">&lt;</span>img v-if="post.cover_url" :src="post.cover_url" /<span class="op">&gt;</span>
+    <span class="op">&lt;</span>/div<span class="op">&gt;</span>
+  <span class="op">&lt;</span>/div<span class="op">&gt;</span>
+<span class="op">&lt;</span>/template<span class="op">&gt;</span></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- ───────────── STEP 8 ───────────── -->
+    <div class="section reveal" id="step8">
+      <div class="section-number">Step 8 / 8</div>
+      <h2>Vue 图片上传到 R2</h2>
+      <p class="section-intro">发布文章时选择封面图，上传到 R2，拿回 URL 后保存到文章数据中。</p>
+
+      <div class="code-block-full">
+        <div class="code-header">
+          <span class="code-lang">VUE</span>
+          <span class="code-filename">src/views/CreatePost.vue（图片上传部分）</span>
+          <button class="copy-btn" onclick="copyCode(this)">复制</button>
+        </div>
+        <pre><span class="op">&lt;</span>script setup<span class="op">&gt;</span>
+<span class="kw">import</span> { ref } <span class="kw">from</span> <span class="st">'vue'</span>
+<span class="kw">import</span> { uploadImage, createPost } <span class="kw">from</span> <span class="st">'@/api/blog'</span>
+
+<span class="kw">const</span> form = <span class="fn">ref</span>({ title: <span class="st">''</span>, content: <span class="st">''</span>, cover_url: <span class="st">''</span> })
+<span class="kw">const</span> uploading = <span class="fn">ref</span>(<span class="kw">false</span>)
+
+<span class="cm">// 选择图片后自动上传</span>
+<span class="kw">async function</span> <span class="fn">onFileChange</span>(e) {
+  <span class="kw">const</span> file = e.target.files[<span class="nm">0</span>]
+  <span class="kw">if</span> (!file) <span class="kw">return</span>
+
+  uploading.value = <span class="kw">true</span>
+  <span class="kw">const</span> { data } = <span class="kw">await</span> <span class="fn">uploadImage</span>(file)
+  form.value.cover_url = data.url   <span class="cm">// 保存 R2 返回的图片 URL</span>
+  uploading.value = <span class="kw">false</span>
+}
+
+<span class="kw">async function</span> <span class="fn">submit</span>() {
+  <span class="kw">await</span> <span class="fn">createPost</span>(form.value, <span class="st">'my-secret-token'</span>)
+  <span class="cm">// 跳转到列表页...</span>
+}
+<span class="op">&lt;</span>/script<span class="op">&gt;</span>
+
+<span class="op">&lt;</span>template<span class="op">&gt;</span>
+  <span class="op">&lt;</span>input type="text" v-model="form.title" placeholder="文章标题" /<span class="op">&gt;</span>
+  <span class="op">&lt;</span>textarea v-model="form.content" placeholder="文章内容"<span class="op">&gt;</span><span class="op">&lt;</span>/textarea<span class="op">&gt;</span>
+
+  <span class="cm">&lt;!-- 图片上传 --&gt;</span>
+  <span class="op">&lt;</span>input type="file" accept="image/*" @change="onFileChange" /<span class="op">&gt;</span>
+  <span class="op">&lt;</span>span v-if="uploading"<span class="op">&gt;</span>上传中...<span class="op">&lt;</span>/span<span class="op">&gt;</span>
+  <span class="op">&lt;</span>img v-if="form.cover_url" :src="form.cover_url" style="max-width:200px" /<span class="op">&gt;</span>
+
+  <span class="op">&lt;</span>button @click="submit"<span class="op">&gt;</span>发布文章<span class="op">&lt;</span>/button<span class="op">&gt;</span>
+<span class="op">&lt;</span>/template<span class="op">&gt;</span></pre>
+      </div>
+    </div>
+
+    <!-- ───────────── DONE ───────────── -->
+    <div class="section reveal" id="done">
+      <div class="section-number">完成 🎉</div>
+      <h2>验收清单 &amp; 下一步</h2>
+      <p class="section-intro">按下面的清单逐项确认，全部通过代表你已经掌握了 Workers + D1 + R2 的核心用法。</p>
+
+      <div class="progress-track">
+        <h3>✅ 实战验收清单</h3>
+        <div class="progress-items">
+          <div class="progress-item">
+            <div class="check">✓</div>
+            <span><code>wrangler dev</code> 本地服务正常启动</span>
+          </div>
+          <div class="progress-item">
+            <div class="check">✓</div>
+            <span>curl GET /api/posts 返回文章列表 JSON</span>
+          </div>
+          <div class="progress-item">
+            <div class="check">✓</div>
+            <span>curl POST /api/posts 成功创建一篇文章</span>
+          </div>
+          <div class="progress-item">
+            <div class="check">✓</div>
+            <span>图片上传接口返回 R2 URL</span>
+          </div>
+          <div class="progress-item">
+            <div class="check">✓</div>
+            <span>Vue 页面成功渲染文章列表</span>
+          </div>
+          <div class="progress-item">
+            <div class="check">✓</div>
+            <span><code>wrangler deploy</code> 部署到线上，URL 可访问</span>
+          </div>
+        </div>
+      </div>
+
+      <table class="tbl" style="margin-top:32px;">
+        <thead>
+          <tr>
+            <th>你学会了</th>
+            <th>对应你原来的技术</th>
+            <th>关键命令 / 代码</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Workers</td>
+            <td>Spring Boot Controller</td>
+            <td><code>export default { fetch() }</code></td>
+          </tr>
+          <tr>
+            <td>D1 建表</td>
+            <td>MySQL 建表</td>
+            <td><code>wrangler d1 execute --file</code></td>
+          </tr>
+          <tr>
+            <td>D1 查询</td>
+            <td>MyBatis Mapper</td>
+            <td><code>env.DB.prepare(sql).bind().all()</code></td>
+          </tr>
+          <tr>
+            <td>R2 上传</td>
+            <td>OSS SDK putObject</td>
+            <td><code>env.IMAGES.put(key, stream)</code></td>
+          </tr>
+          <tr>
+            <td>Vue 对接</td>
+            <td>axios 调 Spring Boot</td>
+            <td><code>api.get('/api/posts')</code></td>
+          </tr>
+          <tr>
+            <td>部署</td>
+            <td>上传 jar / Docker push</td>
+            <td><code>wrangler deploy</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout callout-info" style="margin-top:32px;">
+        <div class="callout-title">🚀 下一步可以做什么</div>
+        <p>
+          1. <strong style="color:var(--text)">加 JWT 鉴权</strong>：把简单 token 换成 Jose 库实现 JWT（Workers 支持 Web Crypto API）<br>
+          2. <strong style="color:var(--text)">接入 KV</strong>：用 Cloudflare KV 做缓存，加速文章列表读取<br>
+          3. <strong style="color:var(--text)">配置自定义域名</strong>：给 Workers 绑定你自己的域名<br>
+          4. <strong style="color:var(--text)">Vue 部署到 Pages</strong>：用 Cloudflare Pages 部署前端，和 Workers 无缝对接
+        </p>
+      </div>
+
+      <div style="margin-top:48px; padding-top:32px; border-top:1px solid var(--border); text-align:center;">
+        <a href="index.html" style="display:inline-flex;align-items:center;gap:8px;color:var(--orange);text-decoration:none;font-size:14px;font-weight:600;font-family:'JetBrains Mono',monospace;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+          返回首页，查看更多教程
+        </a>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  // ─── Reveal on scroll ───
+  const reveals = document.querySelectorAll('.reveal');
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+  }, { threshold: 0.08 });
+  reveals.forEach(el => observer.observe(el));
+
+  // ─── Active nav link ───
+  const navLinks = document.querySelectorAll('.nav-item[href^="#"]');
+  const sections = document.querySelectorAll('.section[id], .hero[id]');
+
+  const navObserver = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        navLinks.forEach(l => l.classList.remove('active'));
+        const active = document.querySelector(`.nav-item[href="#${e.target.id}"]`);
+        if (active) active.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-30% 0px -60% 0px' });
+  sections.forEach(s => navObserver.observe(s));
+
+  // ─── Copy button ───
+  function copyCode(btn) {
+    const pre = btn.closest('.code-header').nextElementSibling;
+    navigator.clipboard.writeText(pre.innerText).then(() => {
+      btn.textContent = '已复制 ✓';
+      btn.style.color = 'var(--green)';
+      btn.style.borderColor = 'var(--green)';
+      setTimeout(() => {
+        btn.textContent = '复制';
+        btn.style.color = '';
+        btn.style.borderColor = '';
+      }, 2000);
+    });
+  }
+</script>
+
+</body>
+</html>
