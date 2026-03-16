@@ -1036,6 +1036,212 @@
 
 <hr class="divider" />
 
+  <!-- R2 -->
+  <section class="section" id="r2">
+    <div class="section-header">
+      <div class="section-icon">🪣</div>
+      <div class="section-meta">
+        <div class="section-tag">CLOUDFLARE R2</div>
+        <div class="section-title">R2<span> 对象存储</span></div>
+        <p class="section-desc">兼容 S3 API 的对象存储，存图片、视频、文档都行。免费套餐 10 GB 存储 + 100 万次 A 类操作/月，且无出口流量费（这是 AWS S3 最大的隐性成本）。</p>
+      </div>
+    </div>
+
+    <div class="alert alert-orange">
+      <span class="alert-icon">💡</span>
+      <div><strong>与 S3 的最大区别</strong>：R2 的出口流量完全免费。AWS S3 按流量收费，大量下载时费用会暴涨；R2 没有这个问题。</div>
+    </div>
+
+    <div class="usecase-grid">
+      <div class="usecase-card">
+        <div class="usecase-icon">🖼️</div>
+        <div class="usecase-title">图片/文件存储</div>
+        <div class="usecase-desc">通过 Worker 上传，生成公开 URL 供前端展示</div>
+      </div>
+      <div class="usecase-card">
+        <div class="usecase-icon">🔑</div>
+        <div class="usecase-title">访问控制</div>
+        <div class="usecase-desc">默认私有，可通过 Worker 鉴权后再返回文件内容，也可开启 bucket 级公开访问</div>
+      </div>
+    </div>
+
+    <h3 style="color:var(--text);font-size:16px;font-weight:700;margin:32px 0 12px;">Worker 中操作 R2</h3>
+
+    <div class="code-block">
+      <div class="code-header">
+        <div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div>
+        <span class="code-lang">JavaScript · R2 读写示例</span>
+      </div>
+      <div class="code-body">
+<pre><span class="c">// 上传文件（env.BUCKET 是 R2 bucket 的 binding）</span>
+<span class="k">const</span> <span class="v">key</span> = <span class="s">`images/${Date.now()}.jpg`</span>;
+<span class="k">await</span> env.<span class="n">BUCKET</span>.<span class="n">put</span>(<span class="v">key</span>, file.<span class="n">stream</span>(), {
+  httpMetadata: { contentType: file.<span class="n">type</span> },
+});
+
+<span class="c">// 读取文件</span>
+<span class="k">const</span> <span class="v">object</span> = <span class="k">await</span> env.<span class="n">BUCKET</span>.<span class="n">get</span>(<span class="v">key</span>);
+<span class="k">if</span> (!<span class="v">object</span>) <span class="k">return new</span> <span class="n">Response</span>(<span class="s">'Not Found'</span>, { status: <span class="v">404</span> });
+<span class="k">return new</span> <span class="n">Response</span>(<span class="v">object</span>.<span class="n">body</span>, {
+  headers: { <span class="s">'Content-Type'</span>: <span class="v">object</span>.httpMetadata?.<span class="n">contentType</span> ?? <span class="s">'application/octet-stream'</span> },
+});
+
+<span class="c">// 删除文件</span>
+<span class="k">await</span> env.<span class="n">BUCKET</span>.<span class="n">delete</span>(<span class="v">key</span>);</pre>
+      </div>
+    </div>
+
+    <h3 style="color:var(--text);font-size:16px;font-weight:700;margin:28px 0 12px;">wrangler.toml 绑定（追加到已有配置）</h3>
+
+    <div class="code-block">
+      <div class="code-header">
+        <div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div>
+        <span class="code-lang">wrangler.toml · 片段</span>
+      </div>
+      <div class="code-body">
+<pre><span class="c"># 追加到 wrangler.toml</span>
+[[<span class="n">r2_buckets</span>]]
+<span class="v">binding</span>     = <span class="s">"BUCKET"</span>      <span class="c"># Worker 里用 env.BUCKET 访问</span>
+<span class="v">bucket_name</span> = <span class="s">"my-images"</span>  <span class="c"># R2 bucket 的实际名称</span></pre>
+      </div>
+    </div>
+
+    <h3 style="color:var(--text);font-size:16px;font-weight:700;margin:28px 0 12px;">关键命令</h3>
+
+    <div class="code-block">
+      <div class="code-header">
+        <div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div>
+        <span class="code-lang">BASH</span>
+      </div>
+      <div class="code-body">
+<pre><span class="c"># 创建 bucket</span>
+<span class="n">wrangler</span> r2 bucket create my-images
+
+<span class="c"># 列出 bucket 中的文件</span>
+<span class="n">wrangler</span> r2 object list my-images
+
+<span class="c"># 上传本地文件到 R2（调试用）</span>
+<span class="n">wrangler</span> r2 object put my-images/test.jpg <span class="f">--file</span> ./test.jpg
+
+<span class="c"># 开启公开访问（Dashboard 操作）：</span>
+<span class="c"># R2 → Bucket → Settings → Public Access → Allow Access</span>
+<span class="c"># 开启后获得 pub-xxx.r2.dev 域名</span></pre>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- D1 -->
+  <section class="section" id="d1">
+    <div class="section-header">
+      <div class="section-icon">🗄️</div>
+      <div class="section-meta">
+        <div class="section-tag">CLOUDFLARE D1</div>
+        <div class="section-title">D1<span> 边缘数据库</span></div>
+        <p class="section-desc">运行在 Cloudflare 边缘的 SQLite 数据库，用标准 SQL 操作，免费套餐 5 GB 存储 + 500 万次读取/天。零配置，无连接池烦恼。</p>
+      </div>
+    </div>
+
+    <div class="usecase-grid">
+      <div class="usecase-card">
+        <div class="usecase-icon">📝</div>
+        <div class="usecase-title">标准 SQL</div>
+        <div class="usecase-desc">完整 SQLite 语法，支持 CREATE / INSERT / SELECT / UPDATE / DELETE，熟悉 SQL 即可上手</div>
+      </div>
+      <div class="usecase-card">
+        <div class="usecase-icon">⚡</div>
+        <div class="usecase-title">与 Worker 原生集成</div>
+        <div class="usecase-desc">通过 binding 直接在 Worker 代码里查询，无需数据库连接字符串，无 TCP 连接开销</div>
+      </div>
+    </div>
+
+    <h3 style="color:var(--text);font-size:16px;font-weight:700;margin:32px 0 12px;">建表（schema.sql）</h3>
+
+    <div class="code-block">
+      <div class="code-header">
+        <div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div>
+        <span class="code-lang">SQL · schema.sql</span>
+      </div>
+      <div class="code-body">
+<pre><span class="k">CREATE TABLE IF NOT EXISTS</span> <span class="n">images</span> (
+  <span class="v">id</span>         <span class="k">INTEGER PRIMARY KEY AUTOINCREMENT</span>,
+  <span class="v">key</span>        <span class="k">TEXT NOT NULL</span>,        <span class="c">-- R2 中的文件路径</span>
+  <span class="v">url</span>        <span class="k">TEXT NOT NULL</span>,        <span class="c">-- 公开访问 URL</span>
+  <span class="v">filename</span>   <span class="k">TEXT</span>,                <span class="c">-- 原始文件名</span>
+  <span class="v">created_at</span> <span class="k">DATETIME DEFAULT</span> <span class="n">CURRENT_TIMESTAMP</span>
+);</pre>
+      </div>
+    </div>
+
+    <h3 style="color:var(--text);font-size:16px;font-weight:700;margin:28px 0 12px;">Worker 中操作 D1</h3>
+
+    <div class="code-block">
+      <div class="code-header">
+        <div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div>
+        <span class="code-lang">JavaScript · D1 读写示例</span>
+      </div>
+      <div class="code-body">
+<pre><span class="c">// 插入一条记录（env.DB 是 D1 的 binding）</span>
+<span class="k">await</span> env.<span class="n">DB</span>
+  .<span class="n">prepare</span>(<span class="s">'INSERT INTO images (key, url, filename) VALUES (?, ?, ?)'</span>)
+  .<span class="n">bind</span>(<span class="v">key</span>, <span class="v">url</span>, <span class="v">filename</span>)
+  .<span class="n">run</span>();
+
+<span class="c">// 查询最新 20 条</span>
+<span class="k">const</span> { <span class="v">results</span> } = <span class="k">await</span> env.<span class="n">DB</span>
+  .<span class="n">prepare</span>(<span class="s">'SELECT * FROM images ORDER BY created_at DESC LIMIT 20'</span>)
+  .<span class="n">all</span>();
+
+<span class="c">// 按 key 查单条</span>
+<span class="k">const</span> <span class="v">row</span> = <span class="k">await</span> env.<span class="n">DB</span>
+  .<span class="n">prepare</span>(<span class="s">'SELECT * FROM images WHERE key = ?'</span>)
+  .<span class="n">bind</span>(<span class="v">key</span>)
+  .<span class="n">first</span>();</pre>
+      </div>
+    </div>
+
+    <h3 style="color:var(--text);font-size:16px;font-weight:700;margin:28px 0 12px;">wrangler.toml 绑定（追加到已有配置）</h3>
+
+    <div class="code-block">
+      <div class="code-header">
+        <div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div>
+        <span class="code-lang">wrangler.toml · 片段</span>
+      </div>
+      <div class="code-body">
+<pre><span class="c"># 追加到 wrangler.toml</span>
+[[<span class="n">d1_databases</span>]]
+<span class="v">binding</span>       = <span class="s">"DB"</span>           <span class="c"># Worker 里用 env.DB 访问</span>
+<span class="v">database_name</span> = <span class="s">"images-db"</span>   <span class="c"># D1 数据库名称</span>
+<span class="v">database_id</span>   = <span class="s">"your-id"</span>     <span class="c"># 创建后从控制台获取</span></pre>
+      </div>
+    </div>
+
+    <h3 style="color:var(--text);font-size:16px;font-weight:700;margin:28px 0 12px;">关键命令</h3>
+
+    <div class="code-block">
+      <div class="code-header">
+        <div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div>
+        <span class="code-lang">BASH</span>
+      </div>
+      <div class="code-body">
+<pre><span class="c"># 创建数据库（输出中包含 database_id）</span>
+<span class="n">wrangler</span> d1 create images-db
+
+<span class="c"># 执行 schema 建表</span>
+<span class="n">wrangler</span> d1 execute images-db <span class="f">--file</span>=./schema.sql
+
+<span class="c"># 本地调试时执行（不影响生产）</span>
+<span class="n">wrangler</span> d1 execute images-db <span class="f">--local</span> <span class="f">--file</span>=./schema.sql
+
+<span class="c"># 直接执行 SQL 语句</span>
+<span class="n">wrangler</span> d1 execute images-db <span class="f">--command</span> <span class="s">"SELECT * FROM images"</span></pre>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider" />
+
   </main>
 </div>
 </body>
